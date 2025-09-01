@@ -1,1 +1,52 @@
+import feedparser
+from datetime import datetime
+from pathlib import Path
+import html
+import os
+
+# ========= AYARLAR =========
+RSS_URL = os.getenv("RSS_URL", "https://gundemsivas.com/feed")  # Actions'ta ENV ile geçilecek
+MAX_ITEMS = int(os.getenv("MAX_ITEMS", "30"))
+TEMPLATE_PATH = Path("site/templates/index.html")
+OUT_DIR = Path("public/news")
+OUT_FILE = OUT_DIR / "index.html"
+# ===========================
+
+def fmt_date(entry):
+    for key in ("published_parsed", "updated_parsed"):
+        t = getattr(entry, key, None)
+        if t:
+            return datetime(*t[:6]).strftime("%d.%m.%Y")
+    return ""
+
+def fmt_item(entry):
+    title = html.escape(entry.get("title", "Başlıksız"))
+    link  = html.escape(entry.get("link", "#"))
+    dstr  = fmt_date(entry)
+    date_span = f' <span class="date">— {dstr}</span>' if dstr else ""
+    return f'<li><a href="{link}" rel="noopener">{title}</a>{date_span}</li>'
+
+def main():
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    feed = feedparser.parse(RSS_URL)
+    entries = feed.entries[:MAX_ITEMS] if hasattr(feed, "entries") else []
+
+    if not entries:
+        news_html = "<li>Şu an listelenecek içerik bulunamadı.</li>"
+    else:
+        news_html = "\n".join(fmt_item(e) for e in entries)
+
+    html_out = (
+        template
+        .replace("{{NEWS_LIST}}", news_html)
+        .replace("{{LAST_BUILD}}", datetime.utcnow().strftime("%d.%m.%Y %H:%M UTC"))
+    )
+
+    OUT_FILE.write_text(html_out, encoding="utf-8")
+    print(f"Generated: {OUT_FILE}")
+
+if __name__ == "__main__":
+    main()
 
